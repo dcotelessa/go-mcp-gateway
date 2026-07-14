@@ -304,7 +304,7 @@ func (s *Session) readMessage() (jsonRPCResponse, error) {
 func (s *Session) idleSince() time.Time {
 	nano := atomic.LoadInt64(&s.lastUsed)
 	if nano == 0 {
-		return time.Now()
+		return time.Unix(0, 0) // never used — treat as epoch (always idle)
 	}
 	return time.Unix(0, nano)
 }

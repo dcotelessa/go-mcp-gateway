@@ -178,7 +178,11 @@ func (m *Manager) Shutdown() {
 
 // sweepLoop periodically evicts idle sessions.
 func (m *Manager) sweepLoop() {
-	ticker := time.NewTicker(time.Duration(m.cfg.IdleTimeoutMin) * time.Minute / 2)
+	interval := time.Duration(m.cfg.IdleTimeoutMin) * time.Minute / 2
+	if interval <= 0 {
+		interval = time.Second
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
