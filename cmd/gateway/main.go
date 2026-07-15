@@ -21,6 +21,8 @@ import (
 )
 
 func main() {
+	// Register -config flag before flag.Parse() so it's available to config.Load()
+	flag.String("config", "", "Path to config.yaml (default: GATEWAY_CONFIG env → ./config.yaml → built-in defaults)")
 	flag.Parse()
 
 	// Load and validate configuration
@@ -124,26 +126,18 @@ func main() {
 	)
 	defer drainCancel()
 
-	// 1. Stop accepting new HTTP connections, drain in-flight
 	if err := httpSrv.Shutdown(drainCtx); err != nil {
 		fmt.Fprintf(os.Stderr, "gateway: HTTP drain error: %v\n", err)
 	}
-
-	// 2. Shutdown model manager (SIGTERM resident process)
 	if err := mm.Shutdown(); err != nil {
 		fmt.Fprintf(os.Stderr, "gateway: model manager shutdown error: %v\n", err)
 	}
-
-	// 3. Shutdown LSP sessions
 	lspMgr.Shutdown()
-
-	// 4. Stop policy sweep goroutine
 	pol.Stop()
 
 	fmt.Println("gateway: shutdown complete")
 }
 
-// toMMModels converts config.ModelConfig map to modelmanager.ModelConfig map.
 func toMMModels(models map[string]config.ModelConfig) map[string]modelmanager.ModelConfig {
 	out := make(map[string]modelmanager.ModelConfig, len(models))
 	for tier, m := range models {

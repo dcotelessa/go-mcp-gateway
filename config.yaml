@@ -1,0 +1,69 @@
+server:
+  port: 9090
+
+mcp:
+  session_idle_ttl_minutes: 30
+  endpoint_path: /mcp
+
+llama_server:
+  exec_path: /home/dcotelessa/llama.cpp/build/bin/llama-server
+  health_timeout_sec: 60
+  stop_timeout_sec: 10
+  log_dir: ./logs
+
+vram:
+  total_mib: 16311
+  reserved_mib: 1024
+
+models:
+  local_ornith:
+    path: /home/dcotelessa/models/ornith-35b/ornith-1.0-35b-Q4_K_M.gguf
+    vram_requirement_mib: 20000
+    port: 8091
+    extra_args:
+      - --ctx-size
+      - "4096"
+      - --parallel
+      - "1"
+
+  local_qwen:
+    path: /home/dcotelessa/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    vram_requirement_mib: 22000
+    port: 8092
+    extra_args:
+      - --ctx-size
+      - "4096"
+      - --parallel
+      - "1"
+
+  local_glm:
+    path: /home/dcotelessa/models/GLM-4.7-Flash-UD-Q3_K_XL.gguf
+    vram_requirement_mib: 13000
+    port: 8093
+    extra_args:
+      - --ctx-size
+      - "8192"
+      - --parallel
+      - "2"
+
+remote_apis:
+  deepseek_base_url: https://api.deepseek.com/v1
+  deepseek_api_key: ""
+  glm_base_url: https://api.z.ai/api/coding/paas/v4
+  glm_api_key: ""
+
+policy:
+  budget_deepseek_daily: 1000000
+  budget_glm_daily: 500000
+  session_rate_per_min: 20
+  session_tokens_per_hour: 200000
+  session_idle_ttl_min: 30
+  budget_sweep_interval_min: 5
+
+lsp:
+  idle_timeout_min: 15
+  request_timeout_sec: 10
+  init_timeout_sec: 30
+
+rest:
+  shutdown_drain_sec: 10
