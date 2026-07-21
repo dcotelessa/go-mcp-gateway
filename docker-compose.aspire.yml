@@ -1,0 +1,23 @@
+# Local telemetry backend for go-mcp-gateway development.
+# Aspire Dashboard accepts OTLP and provides traces, metrics, and logs UI.
+#
+# Usage:
+#   make dev-telemetry        # start dashboard
+#   make stop-telemetry       # stop dashboard
+#   open http://localhost:18888
+#
+# Then enable telemetry in config.yaml:
+#   telemetry:
+#     enabled: true
+
+services:
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    container_name: gateway-aspire
+    ports:
+      - "18888:18888"   # Dashboard UI
+      - "4317:18889"    # OTLP gRPC (if needed)
+      - "4318:18890"    # OTLP HTTP — gateway exports here
+    environment:
+      - ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true
+    restart: unless-stopped
