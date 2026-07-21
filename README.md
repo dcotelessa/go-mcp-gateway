@@ -224,11 +224,14 @@ Export via OTLP to any compatible backend. I use Grafana + Prometheus locally. A
 - Race-detector clean across all packages
 - MCP + REST dual surface, llama.cpp process management with VRAM-aware layer splitting
 
-**v0.2 — OpenTelemetry**
-- `gen_ai.*` metric emission on every completion
-- OTLP exporter configuration in `config.yaml`
-- Cost attribution table (price per million tokens per tier)
-- Grafana dashboard JSON for token usage and latency by model
+**v0.2 — OpenTelemetry** ✅ _(complete)_
+- `gen_ai.client.token.usage` histogram per tier/model/complexity
+- `gen_ai.client.operation.duration` histogram per tier/model/complexity
+- `gateway.tier.budget.remaining` observable gauge for remote tiers
+- OTLP HTTP exporter configurable via `config.yaml`
+- Aspire Dashboard docker-compose for local development (`make dev-telemetry`)
+- Traces on `/classify` and `/implement` handlers
+- All metrics confirmed in Aspire Dashboard
 
 **v0.3 — Remote API clients**
 - Full DeepSeek V4-Flash client (streaming + non-streaming)
