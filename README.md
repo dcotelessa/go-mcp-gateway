@@ -233,11 +233,17 @@ Export via OTLP to any compatible backend. I use Grafana + Prometheus locally. A
 - Traces on `/classify` and `/implement` handlers
 - All metrics confirmed in Aspire Dashboard
 
-**v0.3 — Remote API clients**
+**v0.3 — Remote API clients + cost-per-artifact telemetry**
 - Full DeepSeek V4-Flash client (streaming + non-streaming)
 - GLM-5.2 client via Z.ai Coding Plan endpoint
 - OpenRouter fallback client
 - Upstream 429 Retry-After parsing per provider
+- Task-level telemetry: `gateway.task.attempts`, `gateway.task.qa_failures`, `gateway.task.tokens_total`, `gateway.task.accepted`
+- Cost-per-accepted-artifact derived metric (tokens × retries × tier price)
+- Schema compliance rate: `gateway.task.schema_violations`
+- Tool recovery rate: `gateway.task.tool_failures` / `gateway.task.tool_recoveries`
+- Mastra workflow OTel instrumentation emitting to same OTLP endpoint
+- Unified trace linking gateway + Mastra spans via trace_id propagation
 
 **v0.4 — LSP diagnostics integration**
 - `lsp_diagnostics` surfacing compiler errors to QA agents
