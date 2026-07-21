@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dcotelessa/gateway/internal/config"
+	"github.com/dcotelessa/gateway/internal/telemetry"
 	"github.com/dcotelessa/gateway/internal/lsp"
 	mcpserver "github.com/dcotelessa/gateway/internal/mcp"
 	"github.com/dcotelessa/gateway/internal/modelmanager"
@@ -33,6 +34,33 @@ func main() {
 	}
 	if err := config.Validate(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "gateway: config validation error: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Initialise OpenTelemetry (no-op when disabled)
+	telShutdown, err := telemetry.Init(context.Background(), telemetry.Config{
+		Enabled: cfg.Telemetry.Enabled,
+		Service: telemetry.ServiceConfig{
+			Name:    cfg.Telemetry.Service.Name,
+			Version: cfg.Telemetry.Service.Version,
+		},
+		OTLP: telemetry.OTLPConfig{
+			Endpoint: cfg.Telemetry.OTLP.Endpoint,
+			Insecure: cfg.Telemetry.OTLP.Insecure,
+		},
+		Metrics: telemetry.MetricsConfig{
+			ExportIntervalSec: cfg.Telemetry.Metrics.ExportIntervalSec,
+		},
+		Traces: telemetry.TracesConfig{
+			SamplingRatio: cfg.Telemetry.Traces.SamplingRatio,
+		},
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "gateway: telemetry init error: %v\n", err)
+		os.Exit(1)
+	}
+	if err := telemetry.InitMetrics(); err != nil {
+		fmt.Fprintf(os.Stderr, "gateway: telemetry metrics error: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -129,6 +157,13 @@ func main() {
 	if err := httpSrv.Shutdown(drainCtx); err != nil {
 		fmt.Fprintf(os.Stderr, "gateway: HTTP drain error: %v\n", err)
 	}
+	// Flush telemetry before model shutdown
+	telCtx, telCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer telCancel()
+	if err := telShutdown(telCtx); err != nil {
+		fmt.Fprintf(os.Stderr, "gateway: telemetry shutdown error: %v\n", err)
+	}
+
 	if err := mm.Shutdown(); err != nil {
 		fmt.Fprintf(os.Stderr, "gateway: model manager shutdown error: %v\n", err)
 	}
