@@ -7,6 +7,11 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/dcotelessa/gateway/internal/telemetry"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // CompletionRequest is an OpenAI-compatible chat completion request.
@@ -45,11 +50,25 @@ type Usage struct {
 const completionTimeoutSec = 120
 
 // Complete sends a completion request to the resident llama-server instance.
+// Emits gen_ai.client.token.usage and gen_ai.client.operation.duration metrics.
 func (m *Manager) Complete(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
 	r := m.Resident()
 	if r == nil {
 		return CompletionResponse{}, fmt.Errorf("modelmanager: no resident model")
 	}
+
+	// Start span and timer before the HTTP call
+	tracer := otel.Tracer("github.com/dcotelessa/gateway")
+	ctx, span := tracer.Start(ctx, "modelmanager.Complete")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("gen_ai.system", telemetry.SystemForTier(r.Tier)),
+		attribute.String("gen_ai.request.model", r.Tier),
+		attribute.String("gateway.tier", r.Tier),
+	)
+
+	start := time.Now()
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", r.Port)
 
@@ -67,19 +86,57 @@ func (m *Manager) Complete(ctx context.Context, req CompletionRequest) (Completi
 
 	client := &http.Client{Timeout: completionTimeoutSec * time.Second}
 	resp, err := client.Do(httpReq)
+
+	duration := time.Since(start).Seconds()
+
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		// Record duration even on error
+		telemetry.RecordOperationDuration(ctx, telemetry.OpAttrs{
+			System:    telemetry.SystemForTier(r.Tier),
+			Model:     r.Tier,
+			Tier:      r.Tier,
+			Operation: "chat",
+		}, duration)
 		return CompletionResponse{}, fmt.Errorf("modelmanager: completion request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return CompletionResponse{}, fmt.Errorf("modelmanager: completion status %d", resp.StatusCode)
+		err := fmt.Errorf("modelmanager: completion status %d", resp.StatusCode)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return CompletionResponse{}, err
 	}
 
 	var result CompletionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return CompletionResponse{}, fmt.Errorf("modelmanager: decode response: %w", err)
 	}
+
+	// Record duration (success)
+	telemetry.RecordOperationDuration(ctx, telemetry.OpAttrs{
+		System:    telemetry.SystemForTier(r.Tier),
+		Model:     r.Tier,
+		Tier:      r.Tier,
+		Operation: "chat",
+	}, duration)
+
+	// Record token usage (success only)
+	attrs := telemetry.TokenUsageAttrs{
+		System: telemetry.SystemForTier(r.Tier),
+		Model:  r.Tier,
+		Tier:   r.Tier,
+	}
+	telemetry.RecordTokenUsage(ctx, attrs, telemetry.TokenTypeInput, int64(result.Usage.PromptTokens))
+	telemetry.RecordTokenUsage(ctx, attrs, telemetry.TokenTypeOutput, int64(result.Usage.CompletionTokens))
+
+	span.SetAttributes(
+		attribute.Int("gen_ai.usage.input_tokens", result.Usage.PromptTokens),
+		attribute.Int("gen_ai.usage.output_tokens", result.Usage.CompletionTokens),
+	)
+	span.SetStatus(codes.Ok, "")
 
 	return result, nil
 }

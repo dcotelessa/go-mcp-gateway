@@ -12,6 +12,10 @@ import (
 	"github.com/dcotelessa/gateway/internal/modelmanager"
 	"github.com/dcotelessa/gateway/internal/policy"
 	"github.com/dcotelessa/gateway/internal/router"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 // HandlerConfig holds dependencies for the REST handlers.
@@ -73,17 +77,32 @@ func sessionKey(r *http.Request) string {
 // --- /classify ---
 
 func (h *restHandlers) classify(w http.ResponseWriter, r *http.Request) {
+	tracer := otel.Tracer("github.com/dcotelessa/gateway")
+	ctx, span := tracer.Start(r.Context(), "gateway.rest.classify")
+	defer span.End()
+	span.SetAttributes(semconv.HTTPRequestMethodKey.String(r.Method))
+
 	var req ClassifyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Task == "" {
+		span.SetStatus(codes.Error, "missing task")
 		writeError(w, http.StatusBadRequest, "missing_task", "task field is required")
 		return
 	}
 
+	_ = ctx // propagated via span; Router.Classify doesn't take ctx yet
 	result, err := h.cfg.Router.Classify(req.Task)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		writeError(w, http.StatusInternalServerError, "classify_error", err.Error())
 		return
 	}
+
+	span.SetAttributes(
+		attribute.String("gateway.complexity", string(result.Complexity)),
+		attribute.String("gateway.qa_level", string(result.QALevel)),
+	)
+	span.SetStatus(codes.Ok, "")
 
 	writeJSON(w, http.StatusOK, ClassifyResponse{
 		Complexity: string(result.Complexity),

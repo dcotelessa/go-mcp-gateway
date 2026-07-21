@@ -67,3 +67,16 @@ lsp:
 
 rest:
   shutdown_drain_sec: 10
+
+telemetry:
+  enabled: true
+  service:
+    name: go-mcp-gateway
+    version: "0.2.0"
+  otlp:
+    endpoint: http://localhost:4318
+    insecure: true
+  metrics:
+    export_interval_sec: 15
+  traces:
+    sampling_ratio: 1.0
