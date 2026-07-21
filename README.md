@@ -212,7 +212,7 @@ This data answers questions like:
 
 Export via OTLP to any compatible backend. I use Grafana + Prometheus locally. A small public dashboard showing aggregated (non-sensitive) routing statistics is planned for v0.5 — opt-in only, no prompt content ever exported.
 
-![Grafana token usage dashboard](docs/screenshots/grafana-token-usage.png)
+![Aspire Dashboard metrics](docs/screenshots/aspire-metrics.png)
 
 ---
 
