@@ -86,6 +86,17 @@ func main() {
 		BudgetGLMDaily:      cfg.Policy.BudgetGLMDaily,
 	})
 
+	// Register budget gauge — fires every metrics export interval
+	if err := telemetry.RegisterBudgetGauge(func() map[string]int64 {
+		return map[string]int64{
+			"remote_deepseek": pol.TierRemaining("remote_deepseek"),
+			"remote_glm":      pol.TierRemaining("remote_glm"),
+		}
+		// Local tiers omitted — slot-based, not token-based
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "gateway: budget gauge: %v\n", err)
+	}
+
 	lspCfg := lsp.DefaultConfig()
 	lspCfg.IdleTimeoutMin = cfg.LSP.IdleTimeoutMin
 	lspCfg.RequestTimeoutSec = cfg.LSP.RequestTimeoutSec

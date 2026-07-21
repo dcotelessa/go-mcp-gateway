@@ -113,7 +113,7 @@ func Init(ctx context.Context, cfg Config) (ShutdownFunc, error) {
 
 	// Trace provider
 	traceExp, err := otlptracehttp.New(ctx,
-		otlptracehttp.WithEndpointURL(cfg.OTLP.Endpoint+"/v1/traces"),
+		otlptracehttp.WithEndpointURL(cfg.OTLP.Endpoint),
 		insecureTraceOption(cfg.OTLP.Insecure),
 	)
 	if err != nil {
@@ -129,7 +129,7 @@ func Init(ctx context.Context, cfg Config) (ShutdownFunc, error) {
 
 	// Metric provider
 	metricExp, err := otlpmetrichttp.New(ctx,
-		otlpmetrichttp.WithEndpointURL(cfg.OTLP.Endpoint+"/v1/metrics"),
+		otlpmetrichttp.WithEndpointURL(cfg.OTLP.Endpoint),
 		insecureMetricOption(cfg.OTLP.Insecure),
 	)
 	if err != nil {
