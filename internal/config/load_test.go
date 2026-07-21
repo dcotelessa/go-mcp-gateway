@@ -82,3 +82,32 @@ server:
 	_, err := Load()
 	assert.Error(t, err, "malformed YAML should return an error")
 }
+
+func TestLoadTelemetrySection(t *testing.T) {
+	yaml := `
+telemetry:
+  enabled: true
+  service:
+    name: my-gateway
+    version: "0.2.0"
+  otlp:
+    endpoint: http://otel-collector:4318
+    insecure: true
+  metrics:
+    export_interval_sec: 30
+  traces:
+    sampling_ratio: 0.5
+`
+	tmp := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(tmp, []byte(yaml), 0644))
+	t.Setenv("GATEWAY_CONFIG", tmp)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.True(t, cfg.Telemetry.Enabled)
+	assert.Equal(t, "my-gateway", cfg.Telemetry.Service.Name)
+	assert.Equal(t, "http://otel-collector:4318", cfg.Telemetry.OTLP.Endpoint)
+	assert.Equal(t, 30, cfg.Telemetry.Metrics.ExportIntervalSec)
+	assert.Equal(t, 0.5, cfg.Telemetry.Traces.SamplingRatio)
+}

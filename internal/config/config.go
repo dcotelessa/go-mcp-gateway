@@ -11,6 +11,7 @@ type Config struct {
 	Policy     PolicyConfig     `yaml:"policy"`
 	LSP        LSPConfig        `yaml:"lsp"`
 	REST       RESTConfig       `yaml:"rest"`
+	Telemetry  TelemetryConfig  `yaml:"telemetry"`
 }
 
 type ServerConfig struct {
@@ -100,5 +101,49 @@ func Defaults() Config {
 		REST: RESTConfig{
 			ShutdownDrainSec: 10,
 		},
+		Telemetry: TelemetryConfig{
+			Enabled: false,
+			Service: TelemetryServiceConfig{
+				Name:    "go-mcp-gateway",
+				Version: "0.2.0",
+			},
+			OTLP: TelemetryOTLPConfig{
+				Endpoint: "http://localhost:4318",
+				Insecure: true,
+			},
+			Metrics: TelemetryMetricsConfig{ExportIntervalSec: 15},
+			Traces:  TelemetryTracesConfig{SamplingRatio: 1.0},
+		},
 	}
+}
+
+// TelemetryConfig holds OpenTelemetry configuration.
+type TelemetryConfig struct {
+	Enabled bool                    `yaml:"enabled"`
+	Service TelemetryServiceConfig  `yaml:"service"`
+	OTLP    TelemetryOTLPConfig     `yaml:"otlp"`
+	Metrics TelemetryMetricsConfig  `yaml:"metrics"`
+	Traces  TelemetryTracesConfig   `yaml:"traces"`
+}
+
+// TelemetryServiceConfig identifies the service in telemetry backends.
+type TelemetryServiceConfig struct {
+	Name    string `yaml:"name"`
+	Version string `yaml:"version"`
+}
+
+// TelemetryOTLPConfig configures the OTLP HTTP exporter.
+type TelemetryOTLPConfig struct {
+	Endpoint string `yaml:"endpoint"`
+	Insecure bool   `yaml:"insecure"`
+}
+
+// TelemetryMetricsConfig configures the metrics pipeline.
+type TelemetryMetricsConfig struct {
+	ExportIntervalSec int `yaml:"export_interval_sec"`
+}
+
+// TelemetryTracesConfig configures the trace pipeline.
+type TelemetryTracesConfig struct {
+	SamplingRatio float64 `yaml:"sampling_ratio"`
 }

@@ -81,3 +81,16 @@ lsp:
 
 rest:
   shutdown_drain_sec: 10
+
+telemetry:
+  enabled: false          # set true to emit gen_ai.* metrics + traces
+  service:
+    name: go-mcp-gateway
+    version: "0.2.0"
+  otlp:
+    endpoint: http://localhost:4318   # Aspire Dashboard or Grafana OTLP
+    insecure: true                    # false for production TLS
+  metrics:
+    export_interval_sec: 15
+  traces:
+    sampling_ratio: 1.0              # 1.0 = always sample (reduce in prod)

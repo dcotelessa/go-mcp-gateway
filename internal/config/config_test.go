@@ -27,3 +27,13 @@ func TestConfigStructFields(t *testing.T) {
 	assert.Nil(t, cfg.Models)
 	assert.Empty(t, cfg.RemoteAPIs.DeepSeekAPIKey)
 }
+
+func TestDefaults_TelemetrySection(t *testing.T) {
+	cfg := Defaults()
+	assert.False(t, cfg.Telemetry.Enabled)
+	assert.Equal(t, "go-mcp-gateway", cfg.Telemetry.Service.Name)
+	assert.Equal(t, "http://localhost:4318", cfg.Telemetry.OTLP.Endpoint)
+	assert.True(t, cfg.Telemetry.OTLP.Insecure)
+	assert.Equal(t, 15, cfg.Telemetry.Metrics.ExportIntervalSec)
+	assert.Equal(t, 1.0, cfg.Telemetry.Traces.SamplingRatio)
+}
