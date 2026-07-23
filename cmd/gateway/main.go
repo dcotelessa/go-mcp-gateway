@@ -16,6 +16,7 @@ import (
 	mcpserver "github.com/dcotelessa/gateway/internal/mcp"
 	"github.com/dcotelessa/gateway/internal/modelmanager"
 	"github.com/dcotelessa/gateway/internal/policy"
+	"github.com/dcotelessa/gateway/internal/remote"
 	"github.com/dcotelessa/gateway/internal/rest"
 	"github.com/dcotelessa/gateway/internal/router"
 	"github.com/mark3labs/mcp-go/server"
@@ -126,9 +127,16 @@ func main() {
 	)
 	mux.Handle(cfg.MCP.EndpointPath, mcpHTTP)
 
+	// Build remote resolver (non-fatal if no API keys configured)
+	remoteResolver, resolverErr := remote.NewResolver()
+	if resolverErr != nil {
+		fmt.Fprintf(os.Stderr, "gateway: remote resolver warning: %v\n", resolverErr)
+	}
+
 	// Mount REST facade
 	rest.RegisterRoutes(mux, rest.HandlerConfig{
 		Router:   r,
+		Resolver: remoteResolver,
 		Manager:  mm,
 		Policy:   pol,
 		DrainSec: cfg.REST.ShutdownDrainSec,

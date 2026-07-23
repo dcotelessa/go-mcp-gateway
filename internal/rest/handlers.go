@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dcotelessa/gateway/internal/modelmanager"
+	"github.com/dcotelessa/gateway/internal/remote"
 	"github.com/dcotelessa/gateway/internal/policy"
 	"github.com/dcotelessa/gateway/internal/router"
 	"go.opentelemetry.io/otel"
@@ -20,9 +21,10 @@ import (
 
 // HandlerConfig holds dependencies for the REST handlers.
 type HandlerConfig struct {
-	Router  router.Router
-	Manager *modelmanager.Manager
-	Policy  *policy.Registry
+	Router   router.Router
+	Manager  *modelmanager.Manager
+	Policy   *policy.Registry
+	Resolver *remote.Resolver
 	DrainSec int
 }
 
@@ -172,8 +174,28 @@ func (h *restHandlers) implement(w http.ResponseWriter, r *http.Request) {
 		}
 		totalTokens = resp.Usage.TotalTokens
 	default:
-		content = fmt.Sprintf("[remote:%s] %s", routeResult.Tier, req.Task)
-		totalTokens = len(req.Task) / 4
+		// Remote tier — dispatch via resolver
+		if h.cfg.Resolver == nil {
+			writeError(w, http.StatusServiceUnavailable, "no_resolver",
+				"remote resolver not configured")
+			return
+		}
+		adapter, resolveErr := h.cfg.Resolver.Resolve(string(routeResult.Tier))
+		if resolveErr != nil {
+			writeError(w, http.StatusServiceUnavailable, "tier_unavailable", resolveErr.Error())
+			return
+		}
+		remoteResult, remoteErr := adapter.Do(remote.RemoteRequest{
+			Task:       req.Task,
+			Tier:       string(routeResult.Tier),
+			Complexity: string(classifyResult.Complexity),
+		})
+		if remoteErr != nil {
+			writeError(w, http.StatusBadGateway, "remote_error", remoteErr.Error())
+			return
+		}
+		content = remoteResult.Content
+		totalTokens = remoteResult.TotalTokens()
 	}
 
 	h.cfg.Policy.DeductSession(sid, totalTokens)
