@@ -24,6 +24,8 @@ type ImplementResponse struct {
 	FilesChanged  []string `json:"files_changed"`
 	Status        string   `json:"status"`
 	ReasoningTags []string `json:"reasoning_tags"`
+	Content       string   `json:"content,omitempty"`
+	TotalTokens   int      `json:"total_tokens,omitempty"`
 }
 
 // InterpretRequest is the body for POST /interpret.

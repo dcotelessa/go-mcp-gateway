@@ -14,7 +14,7 @@ const (
 
 // tierToOpenRouterModel maps gateway tiers to OpenRouter model aliases.
 var tierToOpenRouterModel = map[string]string{
-	"remote_deepseek": "deepseek/deepseek-chat-v4-flash",
+	"remote_deepseek": "deepseek/deepseek-v4-flash",
 	"remote_glm":      "z-ai/glm-5.2",
 }
 

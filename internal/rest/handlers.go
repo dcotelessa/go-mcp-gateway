@@ -207,8 +207,9 @@ func (h *restHandlers) implement(w http.ResponseWriter, r *http.Request) {
 		FilesChanged:  req.Files,
 		Status:        "complete",
 		ReasoningTags: tags,
+		Content:       content,
+		TotalTokens:   totalTokens,
 	})
-	_ = content
 }
 
 // --- /interpret ---

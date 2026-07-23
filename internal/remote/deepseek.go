@@ -9,7 +9,7 @@ import (
 const (
 	deepSeekName    = "deepseek"
 	deepSeekBaseURL = "https://openrouter.ai/api/v1/chat/completions"
-	deepSeekModel   = "deepseek/deepseek-chat-v4-flash"
+	deepSeekModel   = "deepseek/deepseek-v4-flash"
 )
 
 // DeepSeekAdapter routes to DeepSeek V4-Flash via OpenRouter.
