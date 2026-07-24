@@ -101,8 +101,11 @@ The gateway uses task complexity — sourced from the Mastra workflow `complexit
 | `recovery` | local_ornith | Tight loop, high frequency |
 | `text_op` | local_qwen | Rename/reformat, minimal reasoning |
 | `multi_file` | remote_deepseek | Cross-file contract awareness |
+| `multi_file` + `force_tier: remote_opus` | remote_opus | Correctness-critical, high-stakes refactors |
 
 Fallback cascade on budget exhaustion: `remote_glm → remote_deepseek → local_ornith`
+
+`remote_opus` is terminal — no cascade. Use `force_tier: "remote_opus"` explicitly for correctness-critical tasks. The v0.3 cost-per-artifact telemetry will reveal whether the 35× cost premium over GLM-5.2 is justified on your actual workloads.
 
 Security override (v0.6): `confidential` or `secret` classification bypasses all remote tiers regardless of complexity.
 
