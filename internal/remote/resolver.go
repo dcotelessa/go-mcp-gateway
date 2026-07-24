@@ -43,6 +43,15 @@ func NewResolver() (*Resolver, error) {
 		adapters["remote_deepseek"] = WithFallback(ds, fallback)
 	}
 
+	// Claude Opus 4.8 via OpenRouter — high-stakes correctness-critical tasks
+	if openRouterKey != "" {
+		opus, err := NewOpusAdapter(openRouterKey)
+		if err != nil {
+			return nil, fmt.Errorf("remote: resolver: %w", err)
+		}
+		adapters["remote_opus"] = opus
+	}
+
 	// GLM via Z.ai Coding Plan
 	if zaiKey != "" {
 		glm, err := NewGLMAdapter(zaiKey)

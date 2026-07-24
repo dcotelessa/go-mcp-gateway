@@ -52,6 +52,7 @@ var TierToSystem = map[string]string{
 	"local_glm":       "llama_cpp",
 	"remote_deepseek": "deepseek",
 	"remote_glm":      "z_ai",
+	"remote_opus":     "anthropic",
 }
 
 // SystemForTier returns the gen_ai.system value for a gateway tier.

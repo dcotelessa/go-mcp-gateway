@@ -94,3 +94,15 @@ telemetry:
     export_interval_sec: 15
   traces:
     sampling_ratio: 1.0              # 1.0 = always sample (reduce in prod)
+
+# Price table for cost-per-artifact telemetry (USD per million tokens)
+price_per_million_tokens:
+  remote_deepseek:
+    input: 0.14
+    output: 0.28
+  remote_glm:
+    input: 1.40
+    output: 4.40
+  remote_opus:
+    input: 5.00
+    output: 25.00

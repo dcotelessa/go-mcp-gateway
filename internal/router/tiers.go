@@ -8,6 +8,7 @@ const (
 	TierLocalQwen    Tier = "local_qwen"
 	TierRemoteDeepSeek Tier = "remote_deepseek"
 	TierRemoteGLM    Tier = "remote_glm"
+	TierRemoteOpus   Tier = "remote_opus"
 )
 
 // Complexity maps to a task type from the Mastra workflow contract.
