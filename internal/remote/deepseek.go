@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 const (
@@ -39,8 +40,10 @@ func NewDeepSeekAdapter(apiKey string) (*DeepSeekAdapter, error) {
 
 // Do sends a completion request to DeepSeek V4-Flash via OpenRouter.
 func (a *DeepSeekAdapter) Do(req RemoteRequest) (RemoteResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
 	return doWithRetryAndHeader(
-		context.Background(),
+		ctx,
 		func(ctx context.Context) (RemoteResult, int, string, error) {
 			result, status, err := a.client.do(ctx, req)
 			retryAfter := ""

@@ -140,7 +140,7 @@ func (h *restHandlers) implement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	routeResult, err := h.cfg.Router.Route(classifyResult.Complexity, "")
+	routeResult, err := h.cfg.Router.Route(classifyResult.Complexity, router.Tier(req.ForceTier))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "route_error", err.Error())
 		return

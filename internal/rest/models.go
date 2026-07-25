@@ -17,6 +17,7 @@ type ImplementRequest struct {
 	Task          string   `json:"task"`
 	Files         []string `json:"files"`
 	ReasoningTags []string `json:"reasoningTags"`
+	ForceTier     string   `json:"force_tier,omitempty"`
 }
 
 // ImplementResponse is the body returned by POST /implement.

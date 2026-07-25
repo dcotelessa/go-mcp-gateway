@@ -16,7 +16,7 @@ const (
 var tierToOpenRouterModel = map[string]string{
 	"remote_deepseek": "deepseek/deepseek-v4-flash",
 	"remote_glm":      "z-ai/glm-5.2",
-	"remote_opus":     "anthropic/claude-opus-4.8",
+	"remote_opus":     "anthropic/claude-opus-5",
 }
 
 // OpenRouterFallbackAdapter fires on TerminalError from a primary adapter.

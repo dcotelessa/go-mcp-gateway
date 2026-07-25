@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 const (
@@ -36,8 +37,10 @@ func NewGLMAdapter(apiKey string) (*GLMAdapter, error) {
 
 // Do sends a completion request to GLM-5.2 via Z.ai Coding Plan.
 func (a *GLMAdapter) Do(req RemoteRequest) (RemoteResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
 	return doWithRetryAndHeader(
-		context.Background(),
+		ctx,
 		func(ctx context.Context) (RemoteResult, int, string, error) {
 			result, status, err := a.client.do(ctx, req)
 			retryAfter := ""
