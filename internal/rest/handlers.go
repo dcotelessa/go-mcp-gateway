@@ -9,14 +9,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dcotelessa/gateway/internal/graft"
 	"github.com/dcotelessa/gateway/internal/modelmanager"
-	"github.com/dcotelessa/gateway/internal/remote"
 	"github.com/dcotelessa/gateway/internal/policy"
+	"github.com/dcotelessa/gateway/internal/remote"
 	"github.com/dcotelessa/gateway/internal/router"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // HandlerConfig holds dependencies for the REST handlers.
@@ -25,6 +27,7 @@ type HandlerConfig struct {
 	Manager  *modelmanager.Manager
 	Policy   *policy.Registry
 	Resolver *remote.Resolver
+	Graft    *graft.Client // optional — nil disables context enrichment
 	DrainSec int
 }
 
@@ -115,8 +118,14 @@ func (h *restHandlers) classify(w http.ResponseWriter, r *http.Request) {
 // --- /implement ---
 
 func (h *restHandlers) implement(w http.ResponseWriter, r *http.Request) {
+	tracer := otel.Tracer("github.com/dcotelessa/gateway")
+	ctx, span := tracer.Start(r.Context(), "gateway.rest.implement")
+	defer span.End()
+	span.SetAttributes(semconv.HTTPRequestMethodKey.String(r.Method))
+
 	var req ImplementRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		span.SetStatus(codes.Error, "invalid body")
 		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
 		return
 	}
@@ -128,6 +137,7 @@ func (h *restHandlers) implement(w http.ResponseWriter, r *http.Request) {
 		tags := reasoningTags(err)
 		w.Header().Set("X-RateLimit-Remaining", "0")
 		w.Header().Set("Retry-After", "60")
+		span.SetStatus(codes.Error, "rate limited")
 		writeError(w, http.StatusTooManyRequests, "rate_limited",
 			fmt.Sprintf("%s (tags: %v)", err.Error(), tags))
 		return
@@ -136,36 +146,78 @@ func (h *restHandlers) implement(w http.ResponseWriter, r *http.Request) {
 	// Classify the task to determine tier
 	classifyResult, err := h.cfg.Router.Classify(req.Task)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		writeError(w, http.StatusInternalServerError, "classify_error", err.Error())
 		return
 	}
 
 	routeResult, err := h.cfg.Router.Route(classifyResult.Complexity, router.Tier(req.ForceTier))
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		writeError(w, http.StatusInternalServerError, "route_error", err.Error())
 		return
 	}
 
-	// Ensure local model loaded if needed
+	span.SetAttributes(
+		attribute.String("gateway.complexity", string(classifyResult.Complexity)),
+		attribute.String("gateway.tier", string(routeResult.Tier)),
+	)
+
+	// Bound the whole request — dispatch below reuses this ctx/cancel,
+	// so Graft's lookup shares the same deadline as the model call.
+	ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
+	defer cancel()
+
+	// Enrich task with codebase context via Graft, if configured.
+	// Non-fatal: on error or nil client, fall back to the raw task.
+	taskContent := req.Task
+	if h.cfg.Graft == nil {
+	} else {
+		graftCtx, gErr := h.cfg.Graft.AskFull(ctx, req.Task, 5)
+		if gErr != nil {
+			span.AddEvent("graft_ask_failed", trace.WithAttributes(
+				attribute.String("error", gErr.Error()),
+			))
+		} else {
+			enriched := graft.BuildContext(graftCtx)
+			if enriched == "" {
+			} else {
+				taskContent = enriched + "\n## Task\n\n" + req.Task
+				span.SetAttributes(
+					attribute.Int("gateway.graft.hits", len(graftCtx.Hits)),
+					attribute.Float64("gateway.graft.coverage", graftCtx.Coverage),
+				)
+			}
+		}
+	}
+
+	// Dispatch to local or remote tier
 	var content string
 	var totalTokens int
-
-	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
-	defer cancel()
 
 	switch routeResult.Tier {
 	case router.TierLocalOrnith, router.TierLocalQwen:
 		_, loadErr := h.cfg.Manager.EnsureLoaded(ctx, string(routeResult.Tier))
 		if loadErr != nil {
+			span.RecordError(loadErr)
+			span.SetStatus(codes.Error, loadErr.Error())
 			writeError(w, http.StatusServiceUnavailable, "model_not_loaded", loadErr.Error())
 			return
 		}
 		resp, compErr := h.cfg.Manager.Complete(ctx, modelmanager.CompletionRequest{
 			Messages: []modelmanager.ChatMessage{
-				{Role: "user", Content: req.Task},
+				{Role: "user", Content: taskContent},
+			},
+			MaxTokens: 1500,
+			ChatTemplateKwargs: map[string]interface{}{
+				"enable_thinking": false,
 			},
 		})
 		if compErr != nil {
+			span.RecordError(compErr)
+			span.SetStatus(codes.Error, compErr.Error())
 			writeError(w, http.StatusInternalServerError, "completion_error", compErr.Error())
 			return
 		}
@@ -176,21 +228,26 @@ func (h *restHandlers) implement(w http.ResponseWriter, r *http.Request) {
 	default:
 		// Remote tier — dispatch via resolver
 		if h.cfg.Resolver == nil {
+			span.SetStatus(codes.Error, "no resolver configured")
 			writeError(w, http.StatusServiceUnavailable, "no_resolver",
 				"remote resolver not configured")
 			return
 		}
 		adapter, resolveErr := h.cfg.Resolver.Resolve(string(routeResult.Tier))
 		if resolveErr != nil {
+			span.RecordError(resolveErr)
+			span.SetStatus(codes.Error, resolveErr.Error())
 			writeError(w, http.StatusServiceUnavailable, "tier_unavailable", resolveErr.Error())
 			return
 		}
 		remoteResult, remoteErr := adapter.Do(remote.RemoteRequest{
-			Task:       req.Task,
+			Task:       taskContent,
 			Tier:       string(routeResult.Tier),
 			Complexity: string(classifyResult.Complexity),
 		})
 		if remoteErr != nil {
+			span.RecordError(remoteErr)
+			span.SetStatus(codes.Error, remoteErr.Error())
 			writeError(w, http.StatusBadGateway, "remote_error", remoteErr.Error())
 			return
 		}
@@ -202,6 +259,9 @@ func (h *restHandlers) implement(w http.ResponseWriter, r *http.Request) {
 	h.cfg.Policy.DeductTier(string(routeResult.Tier), totalTokens)
 
 	tags := append(req.ReasoningTags, routeResult.ReasoningTags...)
+
+	span.SetAttributes(attribute.Int("gateway.total_tokens", totalTokens))
+	span.SetStatus(codes.Ok, "")
 
 	writeJSON(w, http.StatusOK, ImplementResponse{
 		FilesChanged:  req.Files,

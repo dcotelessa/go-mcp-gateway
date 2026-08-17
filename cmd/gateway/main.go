@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/dcotelessa/gateway/internal/config"
-	"github.com/dcotelessa/gateway/internal/telemetry"
+	"github.com/dcotelessa/gateway/internal/graft"
 	"github.com/dcotelessa/gateway/internal/lsp"
 	mcpserver "github.com/dcotelessa/gateway/internal/mcp"
 	"github.com/dcotelessa/gateway/internal/modelmanager"
@@ -19,6 +19,7 @@ import (
 	"github.com/dcotelessa/gateway/internal/remote"
 	"github.com/dcotelessa/gateway/internal/rest"
 	"github.com/dcotelessa/gateway/internal/router"
+	"github.com/dcotelessa/gateway/internal/telemetry"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -67,7 +68,6 @@ func main() {
 
 	// Instantiate domain packages
 	r := router.New()
-
 	mm := modelmanager.New(modelmanager.ManagerConfig{
 		ExecPath:         cfg.LlamaServer.ExecPath,
 		HealthTimeoutSec: cfg.LlamaServer.HealthTimeoutSec,
@@ -77,7 +77,6 @@ func main() {
 		ReservedVRAMMiB:  cfg.VRAM.ReservedMiB,
 		Models:           toMMModels(cfg.Models),
 	})
-
 	pol := policy.New(policy.PolicyConfig{
 		RateLimitPerMin:     cfg.Policy.SessionRatePerMin,
 		TokenLimitPerHour:   cfg.Policy.SessionTokensPerHour,
@@ -133,12 +132,24 @@ func main() {
 		fmt.Fprintf(os.Stderr, "gateway: remote resolver warning: %v\n", resolverErr)
 	}
 
+	// Graft codebase context client. Repo root defaults to the process's
+	// working directory — the gateway is expected to run from its own
+	// repo root. Non-fatal if graft isn't installed or unindexed: Ask()
+	// calls fail gracefully and handlers fall back to the raw task.
+	repoRoot, getwdErr := os.Getwd()
+	if getwdErr != nil {
+		fmt.Fprintf(os.Stderr, "gateway: warning: could not determine working directory for graft: %v\n", getwdErr)
+		repoRoot = "."
+	}
+	graftClient := graft.NewClient(repoRoot)
+
 	// Mount REST facade
 	rest.RegisterRoutes(mux, rest.HandlerConfig{
 		Router:   r,
 		Resolver: remoteResolver,
 		Manager:  mm,
 		Policy:   pol,
+		Graft:    graftClient,
 		DrainSec: cfg.REST.ShutdownDrainSec,
 	})
 
@@ -176,6 +187,7 @@ func main() {
 	if err := httpSrv.Shutdown(drainCtx); err != nil {
 		fmt.Fprintf(os.Stderr, "gateway: HTTP drain error: %v\n", err)
 	}
+
 	// Flush telemetry before model shutdown
 	telCtx, telCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer telCancel()

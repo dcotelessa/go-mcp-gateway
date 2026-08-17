@@ -1,0 +1,10 @@
+?   	github.com/dcotelessa/gateway/cmd/gateway	[no test files]
+ok  	github.com/dcotelessa/gateway/internal/config	1.014s
+ok  	github.com/dcotelessa/gateway/internal/lsp	5.326s
+ok  	github.com/dcotelessa/gateway/internal/mcp	1.026s
+ok  	github.com/dcotelessa/gateway/internal/modelmanager	2.022s
+ok  	github.com/dcotelessa/gateway/internal/policy	1.215s
+ok  	github.com/dcotelessa/gateway/internal/remote	5.020s
+ok  	github.com/dcotelessa/gateway/internal/rest	1.017s
+ok  	github.com/dcotelessa/gateway/internal/router	1.012s
+ok  	github.com/dcotelessa/gateway/internal/telemetry	1.015s

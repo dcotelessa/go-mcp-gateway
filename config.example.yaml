@@ -106,3 +106,10 @@ price_per_million_tokens:
   remote_opus:
     input: 5.00
     output: 25.00
+
+# Per-call timeouts for remote adapters (seconds)
+# Prevents runaway calls in overnight autonomous sessions
+remote_timeouts:
+  deepseek_sec: 120
+  glm_sec: 120
+  opus_sec: 180   # Opus thinks longer at high effort

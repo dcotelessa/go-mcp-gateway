@@ -15,9 +15,9 @@ func New() *DefaultRouter {
 // complexityToTier is the single source of truth for task routing.
 // Matches the complexity enum semantics in task-execution-workflow.ts.
 var complexityToTier = map[Complexity]Tier{
-	ComplexityScaffold:   TierLocalOrnith,
-	ComplexitySingleFile: TierLocalOrnith,
-	ComplexityRecovery:   TierLocalOrnith,
+	ComplexityScaffold:   TierLocalQwen,
+	ComplexitySingleFile: TierLocalQwen,
+	ComplexityRecovery:   TierLocalQwen,
 	ComplexityTextOp:     TierLocalQwen,
 	ComplexityMultiFile:  TierRemoteDeepSeek,
 }

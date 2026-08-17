@@ -14,9 +14,9 @@ func TestRoute_ComplexityMapping(t *testing.T) {
 		complexity Complexity
 		wantTier   Tier
 	}{
-		{ComplexityScaffold, TierLocalOrnith},
-		{ComplexitySingleFile, TierLocalOrnith},
-		{ComplexityRecovery, TierLocalOrnith},
+		{ComplexityScaffold, TierLocalQwen},
+		{ComplexitySingleFile, TierLocalQwen},
+		{ComplexityRecovery, TierLocalQwen},
 		{ComplexityTextOp, TierLocalQwen},
 		{ComplexityMultiFile, TierRemoteDeepSeek},
 	}

@@ -22,7 +22,7 @@ models:
     port: 8091
     extra_args:
       - --ctx-size
-      - "4096"
+      - "8192"
       - --parallel
       - "1"
 

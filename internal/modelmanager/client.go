@@ -19,6 +19,8 @@ type CompletionRequest struct {
 	Model    string        `json:"model"`
 	Messages []ChatMessage `json:"messages"`
 	Stream   bool          `json:"stream,omitempty"`
+	MaxTokens int          `json:"max_tokens,omitempty"`
+	ChatTemplateKwargs map[string]interface{} `json:"chat_template_kwargs,omitempty"`
 }
 
 // ChatMessage is a single message in a completion request.
