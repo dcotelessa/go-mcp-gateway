@@ -10,7 +10,7 @@ import (
 const (
 	glmName    = "z_ai"
 	glmBaseURL = "https://api.z.ai/api/coding/v1/chat/completions"
-	glmModel   = "glm-5.2"
+	glmModel   = "glm-5.3"
 )
 
 // GLMAdapter routes to GLM-5.2 via the Z.ai Coding Plan endpoint.

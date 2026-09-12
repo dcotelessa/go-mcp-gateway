@@ -17,17 +17,27 @@ vram:
 
 models:
   local_ornith:
-    path: /home/dcotelessa/models/ornith-35b/ornith-1.0-35b-Q4_K_M.gguf
+    path: /home/dcotelessa/models/ornith-1.5-35b/Ornith-1.5-35B-Q4_K_M.gguf
     vram_requirement_mib: 20000
     port: 8091
     extra_args:
       - --ctx-size
-      - "8192"
+      - "4096"
       - --parallel
       - "1"
 
+  local_ornith_9b:
+    path: /home/dcotelessa/models/ornith-1.5-9b/Ornith-1.5-9B-Q4_K_M.gguf
+    vram_requirement_mib: 6000
+    port: 8094
+    extra_args:
+      - --ctx-size
+      - "8192"
+      - --parallel
+      - "2"
+
   local_qwen:
-    path: /home/dcotelessa/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    path: /home/dcotelessa/models/qwen3.6-35b/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
     vram_requirement_mib: 22000
     port: 8092
     extra_args:
@@ -37,7 +47,7 @@ models:
       - "1"
 
   local_glm:
-    path: /home/dcotelessa/models/GLM-4.7-Flash-UD-Q3_K_XL.gguf
+    path: /home/dcotelessa/models/glm-4.7-flash/GLM-4.7-Flash-UD-Q3_K_XL.gguf
     vram_requirement_mib: 13000
     port: 8093
     extra_args:
@@ -47,7 +57,7 @@ models:
       - "2"
 
 remote_apis:
-  deepseek_base_url: https://api.deepseek.com/v1
+  deepseek_base_url: https://openrouter.ai/api/v1
   deepseek_api_key: ""
   glm_base_url: https://api.z.ai/api/coding/paas/v4
   glm_api_key: ""
@@ -72,7 +82,7 @@ telemetry:
   enabled: true
   service:
     name: go-mcp-gateway
-    version: "0.2.0"
+    version: "0.3.0"
   otlp:
     endpoint: http://localhost:4318
     insecure: true

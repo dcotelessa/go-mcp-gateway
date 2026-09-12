@@ -34,7 +34,7 @@ models:
       - "1"
 
   local_qwen:
-    path: /home/dcotelessa/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    path: /path/to/models/qwen3.6-35b/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
     vram_requirement_mib: 22000   # requires GPU/CPU split
     port: 8082
     extra_args:
@@ -44,7 +44,7 @@ models:
       - "1"
 
   local_glm:
-    path: /home/dcotelessa/models/GLM-4.7-Flash-UD-Q3_K_XL.gguf
+    path: /path/to/models/glm-4.7-flash/GLM-4.7-Flash-UD-Q3_K_XL.gguf
     vram_requirement_mib: 13000   # fits in VRAM (tight)
     port: 8083
     extra_args:
