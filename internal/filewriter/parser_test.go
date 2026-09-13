@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -76,28 +77,10 @@ func TestParse_MultipleBlocksInOrder(t *testing.T) {
 		t.Errorf("op[1] content = %q", ops[1].Content)
 	}
 	for i, op := range ops {
-		if containsFence(op.Content) {
+		if strings.Contains(op.Content, fenceMarker) {
 			t.Errorf("op[%d] content contains a fence marker: %q", i, op.Content)
 		}
 	}
-}
-
-func containsFence(s string) bool {
-	return len(s) >= 3 && (s == fenceMarker ||
-		filepath.Base(s) == fenceMarker ||
-		stringsContains(s, fenceMarker))
-}
-
-func stringsContains(haystack, needle string) bool {
-	return len(needle) > 0 && len(haystack) >= len(needle) &&
-		func() bool {
-			for i := 0; i+len(needle) <= len(haystack); i++ {
-				if haystack[i:i+len(needle)] == needle {
-					return true
-				}
-			}
-			return false
-		}()
 }
 
 // PARSE-2 — Kind classification by existence.
