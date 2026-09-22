@@ -132,6 +132,11 @@ const (
 	// another non-regular file.
 	ReasonNotRegularFile = "not_regular_file"
 
+	// ReasonDuplicateTarget means two operations in one batch resolved to
+	// the same file. The parser cannot catch this: distinct paths can
+	// resolve to one file through a symlink inside the worktree.
+	ReasonDuplicateTarget = "duplicate_target"
+
 	// ReasonIOError means a filesystem operation failed.
 	ReasonIOError = "io_error"
 )

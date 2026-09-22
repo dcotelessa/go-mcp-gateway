@@ -23,8 +23,17 @@ A delete whose target does not exist SHALL succeed and produce a `Change` with `
 ### Requirement: Delete ordering
 Delete operations SHALL be deferred until all create/modify operations in the same batch have been applied. If any create/modify fails, deletes SHALL NOT run.
 
+### Requirement: One target per batch
+Two operations whose paths resolve to the same file SHALL be rejected with reason `duplicate_target`. The parser cannot detect this: distinct paths can resolve to one file through a symlink inside the worktree, and silently letting the later write win would discard a file the model intended to produce.
+
+### Requirement: Preserve file mode
+A modify SHALL preserve the target's existing permission bits. A create SHALL use 0644.
+
+### Requirement: Cancellation
+A cancelled context SHALL stop the batch and roll back, reported as `io_error`.
+
 ### Requirement: Failure reasons
-The writer SHALL report failures with machine-readable reasons: `not_regular_file` (target path is an existing directory or other non-regular file), `io_error` (filesystem error). Safety rejections keep their path-safety reasons.
+The writer SHALL report failures with machine-readable reasons: `not_regular_file` (target exists and is not a regular file), `duplicate_target` (two operations resolve to one file), `io_error` (filesystem error, including cancellation). Safety rejections keep their path-safety reasons.
 
 ### Requirement: Per-op results
 A successful apply SHALL return one `Change` per operation with worktree-relative `Path`, classified `Operation` (never `write`), written `Bytes`, and `Skipped`.
@@ -76,3 +85,18 @@ THEN the Changes report `modify` and `create` respectively
 GIVEN a write with empty Content to an absent path
 WHEN Apply is called
 THEN a zero-byte file exists at the path and the Change reports create with Bytes 0
+
+### APPLY-9 — Two paths resolving to one file
+GIVEN a symlink inside the worktree and two writes, one through it and one direct, that resolve to the same file
+WHEN Apply or DryRun is called
+THEN the batch is rejected with reason `duplicate_target` and nothing is written
+
+### APPLY-10 — Modify preserves permission bits
+GIVEN an existing file with mode 0755
+WHEN a modify is applied
+THEN the file keeps mode 0755
+
+### APPLY-11 — Cancelled context rolls back
+GIVEN a cancelled context
+WHEN Apply is called
+THEN an error is returned, the worktree is byte-identical, and no staging files remain
