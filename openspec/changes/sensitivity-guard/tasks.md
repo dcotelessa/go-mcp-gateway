@@ -19,7 +19,7 @@ Conventions match file-writing-v04. Dependencies on v0.4 groups are noted per gr
 ## Group C — Enforcement (after v0.4 Group 4)
 
 - [ ] C.1 (single_file, impl) `internal/sensitivity/policy.go`: `Decide(worktree, prompt) Verdict{LocalOnly, Block, Source, Findings}` combining workspace policy, scan, and action.
-- [ ] C.2 (multi_file, impl) Local-only routing override with reasoning tag; `filewriter.Input.LocalOnly` wraps `NextTier` so it never returns a remote tier; fail closed when no local tier loads.
+- [ ] C.2 (multi_file, impl) Local-only routing override with reasoning tag; wrap the injected `ExecutorConfig.NextTier` so it never returns a remote tier for a local-only task; fail closed when no local tier loads.
 - [ ] C.3 (multi_file, test) SENS-10..14.
 
 ## Group D — Wiring, endpoint, telemetry (after v0.4 Group 8)

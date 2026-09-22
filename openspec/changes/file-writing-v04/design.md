@@ -18,13 +18,17 @@
 
 ## Amendments (design review, applied before Group 3)
 
-A design review against deep-module principles (see `openspec/design-principles.md`) found three places where the original design added error paths or coupling without adding capability. Each amendment removes something.
+AM-1..3 came from a design review against deep-module principles (see `openspec/design-principles.md`), which found places where the original design added error paths or coupling without adding capability. AM-4..6 surfaced while implementing Group 4. Each amendment removes something — an error path, a coupling, or a duplicated source of truth.
 
 | # | Change | Rationale |
 |---|--------|-----------|
 | AM-1 | Remove `empty_content`. An empty `file:` body writes an empty file. | An empty file is legitimate (package markers, fixtures). The error rejected valid output and would have triggered the retry ladder — burning model calls — on a correct response. Defines an error out of existence. |
 | AM-2 | Delete is idempotent. Deleting an absent file succeeds with `Change.Skipped = true`; `delete_missing` is removed. | The desired end state — file absent — already holds. The old error triggered a full batch rollback over a no-op. The information is preserved as the `gateway.task.phantom_deletes` signal, since it may indicate a model hallucinated the codebase. |
 | AM-3 | The parser is pure. It emits `OpWrite`; the writer classifies create vs modify during validation. | The original parser stat'd the worktree while the path validator separately resolved paths against it — two modules each knowing how worktree resolution works (information leakage). Classification now happens against the validator's resolved path, in one place, so the two can never disagree. The parser needs no filesystem and its tests need no temp directories. |
+| AM-4 | Escalation uses its own ladder, `router.NextTierUp`: local → `remote_deepseek` → `remote_glm`. Opus is never reached automatically. | The original design derived escalation from the budget fallback chain. That chain points toward *cheaper* tiers; escalation needs *more capable* ones. Deriving one from the other would silently couple two independent policies. Stopping at GLM prevents a formatting failure from escalating into the most expensive tier. |
+| AM-5 | `Input` drops `Worktree`; prompts go through a small `Prompts` interface. | The Writer is already bound to a worktree — a second copy in `Input` could disagree, the same leakage AM-3 removed. The interface lets the executor be built and tested before the prompt templates exist. |
+| AM-6 | Model-call failures are terminal (`generate_failed`). | RD-2 covers parse failures only. Retrying an unreachable model only spends more; upstream failover belongs to the routing layer. |
+
 
 ## Technical approach
 
@@ -63,7 +67,7 @@ internal/filewriter/
   executor.go   Executor.Run: attempt ladder, Metrics hooks, Result
   prompt.go     PromptRenderer: standard + strict templates
 
-internal/router/nexttier.go   NextTierUp(tier) (string, bool)   // additive, read-only
+internal/router/nexttier.go   NextTierUp(tier) (string, bool)   // explicit escalation ladder (AM-4)
 internal/telemetry/           +4 counters, FilewriterMetrics adapter
 internal/config/              +FileWriterConfig{BinaryExtensions, DiffContextLines, PromptOverrides}
 internal/rest/                /implement: build executor, map Result → response
@@ -113,6 +117,12 @@ func (b *Batch) Diff(contextLines int) string
 
 type GenerateFn func(ctx context.Context, tier, systemPrompt, userPrompt string) (string, error)
 
+type PromptVariant string // "standard" | "strict"
+
+type Prompts interface { // implemented by PromptRenderer in Group 7
+    Render(variant PromptVariant, tier string, in Input) (system, user string)
+}
+
 type Metrics interface { // adapter in internal/telemetry; nil-safe
     FilesWritten(ctx context.Context, tier, complexity, operation string)
     WriteFailure(ctx context.Context, reason string)
@@ -121,32 +131,43 @@ type Metrics interface { // adapter in internal/telemetry; nil-safe
     SpanFileWritten(ctx context.Context, path, operation string, bytes int)
 }
 
-type Input struct {
+type Input struct { // no Worktree: the Writer owns it (AM-5)
     Task       string
     Complexity string
     Tier       string
-    Worktree   string
     GraftCtx   string
 }
 
-type Executor struct {
-    Parser   *Parser
-    Writer   *Writer
-    Prompts  *PromptRenderer
-    Generate GenerateFn
-    NextTier func(tier string) (string, bool)
-    Metrics  Metrics
+type ExecutorConfig struct {
+    Writer   *Writer    // required
+    Prompts  Prompts    // required
+    Generate GenerateFn // required
+    Parser   *Parser    // defaults to NewParser()
+    NextTier func(tier string) (string, bool) // router.NextTierUp; nil = no escalation
+    Metrics  Metrics    // may be nil
 }
-var ErrParseExhausted = errors.New("filewriter: all parse attempts exhausted")
+func NewExecutor(cfg ExecutorConfig) (*Executor, error)
 func (e *Executor) Run(ctx context.Context, in Input) (*Result, error)
+
+var ErrParseExhausted = errors.New("filewriter: all parse attempts exhausted")
+
+type RunError struct {
+    Reason   string // parse_failed | write_failed | generate_failed
+    Attempts int
+    Tier     string // tier of the last attempt
+    Err      error  // parse_failed wraps ErrParseExhausted and the last *ParseError
+}
 
 type Result struct {
     Content  string
     Tier     string // tier of the ACCEPTED attempt
     Attempts int
     Changes  []Change
-    Diff     string
+    // Diff is provided by Group 5
 }
+
+// internal/router/nexttier.go — explicit escalation ladder (AM-4)
+func NextTierUp(tier string) (string, bool)
 ```
 
 ## Output contract (normative grammar)
@@ -174,6 +195,7 @@ Only `file:` / `file-delete:` fences are operations; every other fence, and anyt
 - **filewriter owns contract + recovery; handlers stay thin.** REST and MCP behave identically because all parsing, path safety, classification, atomicity, diffing, and the RD-2 ladder live in `internal/filewriter`.
 - **The parser is pure (AM-3).** Filesystem knowledge lives in the writer and validator only.
 - **Model calls are injected.** `GenerateFn` and `NextTier` are function fields, so filewriter has no import dependency on modelmanager or router.
+- **Escalation is its own policy (AM-4),** separate from the budget fallback chain, and never reaches Opus.
 - **Metrics behind an interface.** Avoids an import cycle; nil-safe for tests.
 - **Validate-and-classify-total before mutate.** Every path is resolved, checked, and classified before the first byte is written.
 - **Diff is scoped to the batch,** not the worktree.
