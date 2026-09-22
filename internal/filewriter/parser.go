@@ -2,7 +2,6 @@ package filewriter
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -18,15 +17,13 @@ const (
 // Only fences whose info string begins with file: or file-delete: are
 // operations. Every other fence — a plain ```go block, for instance — is
 // ignored entirely, as is all prose.
-type Parser struct {
-	// worktree is the absolute path used to classify create vs modify.
-	// Existence checks are confined to paths under it.
-	worktree string
-}
+//
+// Parser is pure: it holds no state and never touches the filesystem.
+type Parser struct{}
 
-// NewParser returns a Parser that classifies operations against worktree.
-func NewParser(worktree string) *Parser {
-	return &Parser{worktree: worktree}
+// NewParser returns a Parser.
+func NewParser() *Parser {
+	return &Parser{}
 }
 
 // Parse scans output and returns operations in the order their blocks appear.
@@ -41,8 +38,7 @@ func (p *Parser) Parse(output string) ([]FileOp, error) {
 
 	i := 0
 	for i < len(lines) {
-		line := lines[i]
-		trimmed := strings.TrimSpace(line)
+		trimmed := strings.TrimSpace(lines[i])
 
 		if !strings.HasPrefix(trimmed, fenceMarker) {
 			i++
@@ -78,7 +74,6 @@ func (p *Parser) Parse(output string) ([]FileOp, error) {
 		}
 
 		cleanPath := filepath.Clean(rawPath)
-
 		if prev, dup := seen[cleanPath]; dup {
 			return nil, &ParseError{
 				Reason: ReasonDuplicatePath,
@@ -88,30 +83,12 @@ func (p *Parser) Parse(output string) ([]FileOp, error) {
 		}
 		seen[cleanPath] = openLine
 
-		if kind == OpDelete {
-			ops = append(ops, FileOp{
-				Kind:    OpDelete,
-				RawPath: rawPath,
-				Path:    cleanPath,
-			})
-			i = closeIdx + 1
-			continue
+		op := FileOp{Kind: kind, RawPath: rawPath, Path: cleanPath}
+		if kind == OpWrite {
+			// An empty body is a legitimate empty file, not an error.
+			op.Content = body
 		}
-
-		if body == "" {
-			return nil, &ParseError{
-				Reason: ReasonEmptyContent,
-				Detail: fmt.Sprintf("body was empty for %q", rawPath),
-				Line:   openLine,
-			}
-		}
-
-		ops = append(ops, FileOp{
-			Kind:    p.classifyExistence(cleanPath),
-			RawPath: rawPath,
-			Path:    cleanPath,
-			Content: body,
-		})
+		ops = append(ops, op)
 		i = closeIdx + 1
 	}
 
@@ -132,8 +109,7 @@ func classifyInfo(info string) (kind OpKind, rawPath string, isOp bool) {
 	case strings.HasPrefix(info, infoPrefixDelete):
 		return OpDelete, strings.TrimSpace(strings.TrimPrefix(info, infoPrefixDelete)), true
 	case strings.HasPrefix(info, infoPrefixFile):
-		// Kind refined later by existence; OpModify is a placeholder.
-		return OpModify, strings.TrimSpace(strings.TrimPrefix(info, infoPrefixFile)), true
+		return OpWrite, strings.TrimSpace(strings.TrimPrefix(info, infoPrefixFile)), true
 	default:
 		return "", "", false
 	}
@@ -163,17 +139,4 @@ func skipToClose(lines []string, start int) int {
 		}
 	}
 	return len(lines)
-}
-
-// classifyExistence reports OpModify when the target already exists as a
-// regular file inside the worktree, OpCreate otherwise.
-func (p *Parser) classifyExistence(relPath string) OpKind {
-	if p.worktree == "" {
-		return OpCreate
-	}
-	info, err := os.Stat(filepath.Join(p.worktree, relPath))
-	if err == nil && info.Mode().IsRegular() {
-		return OpModify
-	}
-	return OpCreate
 }

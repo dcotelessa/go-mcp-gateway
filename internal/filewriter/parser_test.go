@@ -2,27 +2,9 @@ package filewriter
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
-
-// worktreeWith builds a temp worktree containing the given files.
-func worktreeWith(t *testing.T, files map[string]string) string {
-	t.Helper()
-	root := t.TempDir()
-	for rel, content := range files {
-		abs := filepath.Join(root, rel)
-		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
-			t.Fatalf("mkdir %s: %v", abs, err)
-		}
-		if err := os.WriteFile(abs, []byte(content), 0o644); err != nil {
-			t.Fatalf("write %s: %v", abs, err)
-		}
-	}
-	return root
-}
 
 // parseErr extracts a *ParseError or fails the test.
 func parseErr(t *testing.T, err error) *ParseError {
@@ -36,9 +18,6 @@ func parseErr(t *testing.T, err error) *ParseError {
 
 // PARSE-1 — Multiple blocks parse in order.
 func TestParse_MultipleBlocksInOrder(t *testing.T) {
-	root := worktreeWith(t, nil)
-	p := NewParser(root)
-
 	output := "Here is the plan.\n" +
 		"\n" +
 		"```file:internal/a.go\n" +
@@ -59,7 +38,7 @@ func TestParse_MultipleBlocksInOrder(t *testing.T) {
 		"\n" +
 		"Trailing prose.\n"
 
-	ops, err := p.Parse(output)
+	ops, err := NewParser().Parse(output)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -69,9 +48,8 @@ func TestParse_MultipleBlocksInOrder(t *testing.T) {
 	if ops[0].Path != "internal/a.go" || ops[1].Path != "internal/b.go" {
 		t.Errorf("wrong order or paths: %q, %q", ops[0].Path, ops[1].Path)
 	}
-	wantA := "package a\n\nconst X = 1"
-	if ops[0].Content != wantA {
-		t.Errorf("op[0] content = %q, want %q", ops[0].Content, wantA)
+	if want := "package a\n\nconst X = 1"; ops[0].Content != want {
+		t.Errorf("op[0] content = %q, want %q", ops[0].Content, want)
 	}
 	if ops[1].Content != "package b" {
 		t.Errorf("op[1] content = %q", ops[1].Content)
@@ -83,36 +61,22 @@ func TestParse_MultipleBlocksInOrder(t *testing.T) {
 	}
 }
 
-// PARSE-2 — Kind classification by existence.
-func TestParse_KindClassification(t *testing.T) {
-	root := worktreeWith(t, map[string]string{
-		"internal/existing.go": "package existing\n",
-	})
-	p := NewParser(root)
-
-	ops, err := p.Parse("```file:internal/existing.go\npackage existing\n\nvar V = 1\n```\n")
+// PARSE-2 — File blocks parse as unclassified writes.
+// The parser never touches the filesystem; create vs modify is the writer's
+// decision (APPLY-7).
+func TestParse_FileBlocksAreUnclassifiedWrites(t *testing.T) {
+	ops, err := NewParser().Parse("```file:internal/existing.go\npackage existing\n```\n")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if ops[0].Kind != OpModify {
-		t.Errorf("existing file: got %q, want %q", ops[0].Kind, OpModify)
-	}
-
-	ops, err = p.Parse("```file:internal/brand-new.go\npackage brandnew\n```\n")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if ops[0].Kind != OpCreate {
-		t.Errorf("absent file: got %q, want %q", ops[0].Kind, OpCreate)
+	if ops[0].Kind != OpWrite {
+		t.Errorf("kind = %q, want %q", ops[0].Kind, OpWrite)
 	}
 }
 
 // PARSE-3 — Delete blocks.
 func TestParse_DeleteBlock(t *testing.T) {
-	root := worktreeWith(t, map[string]string{"old.go": "package old\n"})
-	p := NewParser(root)
-
-	ops, err := p.Parse("```file-delete:old.go\n```\n")
+	ops, err := NewParser().Parse("```file-delete:old.go\n```\n")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -132,20 +96,15 @@ func TestParse_DeleteBlock(t *testing.T) {
 
 // PARSE-4 — No operations.
 func TestParse_NoOperations(t *testing.T) {
-	p := NewParser(t.TempDir())
-
-	_, err := p.Parse("I would restructure the swap queue as follows.\n\n```go\nfunc main() {}\n```\n")
-	pe := parseErr(t, err)
-	if pe.Reason != ReasonNoOperations {
+	_, err := NewParser().Parse("I would restructure the swap queue as follows.\n\n```go\nfunc main() {}\n```\n")
+	if pe := parseErr(t, err); pe.Reason != ReasonNoOperations {
 		t.Errorf("reason = %q, want %q", pe.Reason, ReasonNoOperations)
 	}
 }
 
 // PARSE-5 — Unclosed fence.
 func TestParse_UnclosedFence(t *testing.T) {
-	p := NewParser(t.TempDir())
-
-	_, err := p.Parse("```file:internal/a.go\npackage a\n\nconst X = 1\n")
+	_, err := NewParser().Parse("```file:internal/a.go\npackage a\n\nconst X = 1\n")
 	pe := parseErr(t, err)
 	if pe.Reason != ReasonUnclosedFence {
 		t.Errorf("reason = %q, want %q", pe.Reason, ReasonUnclosedFence)
@@ -157,35 +116,34 @@ func TestParse_UnclosedFence(t *testing.T) {
 
 // PARSE-6 — Missing path.
 func TestParse_MissingPath(t *testing.T) {
-	p := NewParser(t.TempDir())
-
-	_, err := p.Parse("```file:\npackage a\n```\n")
-	pe := parseErr(t, err)
-	if pe.Reason != ReasonMissingPath {
+	_, err := NewParser().Parse("```file:\npackage a\n```\n")
+	if pe := parseErr(t, err); pe.Reason != ReasonMissingPath {
 		t.Errorf("reason = %q, want %q", pe.Reason, ReasonMissingPath)
 	}
 }
 
-// PARSE-7 — Empty content.
-func TestParse_EmptyContent(t *testing.T) {
-	p := NewParser(t.TempDir())
-
-	_, err := p.Parse("```file:internal/a.go\n```\n")
-	pe := parseErr(t, err)
-	if pe.Reason != ReasonEmptyContent {
-		t.Errorf("reason = %q, want %q", pe.Reason, ReasonEmptyContent)
+// PARSE-7 — Empty body is an empty file, not an error.
+func TestParse_EmptyBodyIsEmptyFile(t *testing.T) {
+	ops, err := NewParser().Parse("```file:pkg/__init__.py\n```\n")
+	if err != nil {
+		t.Fatalf("empty body should parse, got: %v", err)
+	}
+	if len(ops) != 1 {
+		t.Fatalf("expected 1 op, got %d", len(ops))
+	}
+	if ops[0].Kind != OpWrite || ops[0].Content != "" {
+		t.Errorf("got kind=%q content=%q, want write with empty content",
+			ops[0].Kind, ops[0].Content)
 	}
 }
 
 // PARSE-8 — Non-file fences ignored.
 func TestParse_IgnoresNonFileFences(t *testing.T) {
-	p := NewParser(t.TempDir())
-
 	output := "```go\nnot an operation\n```\n" +
 		"```file:internal/a.go\npackage a\n```\n" +
 		"```bash\nalso not an operation\n```\n"
 
-	ops, err := p.Parse(output)
+	ops, err := NewParser().Parse(output)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -199,14 +157,28 @@ func TestParse_IgnoresNonFileFences(t *testing.T) {
 
 // PARSE-9 — Duplicate target.
 func TestParse_DuplicatePath(t *testing.T) {
-	p := NewParser(t.TempDir())
-
 	output := "```file:internal/a.go\npackage a\n```\n" +
 		"```file:./internal/a.go\npackage a2\n```\n"
 
-	_, err := p.Parse(output)
-	pe := parseErr(t, err)
-	if pe.Reason != ReasonDuplicatePath {
+	_, err := NewParser().Parse(output)
+	if pe := parseErr(t, err); pe.Reason != ReasonDuplicatePath {
 		t.Errorf("reason = %q, want %q", pe.Reason, ReasonDuplicatePath)
+	}
+}
+
+// Backticks inside a non-operation fence must not open an operation.
+func TestParse_BackticksInsideNonOpFenceIgnored(t *testing.T) {
+	output := "```markdown\n" +
+		"Example:\n" +
+		"    ```file:should/not/parse.go\n" +
+		"```\n" +
+		"```file:real.go\npackage real\n```\n"
+
+	ops, err := NewParser().Parse(output)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(ops) != 1 || ops[0].Path != "real.go" {
+		t.Errorf("expected only real.go, got %+v", ops)
 	}
 }

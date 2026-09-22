@@ -1,6 +1,7 @@
 # Spec: REST and MCP Handler Integration
 
 Covers: wiring the file-writing pipeline into `internal/rest` `/implement`, `internal/mcp` `route_complete`, and the `internal/remote` `/interpret` call.
+Amended by **AM-2** (skipped deletes are not reported as changes).
 
 ## Contract deltas (additive only)
 
@@ -11,10 +12,10 @@ Covers: wiring the file-writing pipeline into `internal/rest` `/implement`, `int
 ## Requirements
 
 ### Requirement: Single shared write path
-Both handlers SHALL execute the identical `internal/filewriter` pipeline (parse → retry/escalate → atomic apply → diff). Handlers MUST NOT implement parsing, path validation, or writing inline.
+Both handlers SHALL execute the identical `internal/filewriter` pipeline (parse → retry/escalate → atomic apply → diff). Handlers MUST NOT implement parsing, path validation, classification, or writing inline.
 
 ### Requirement: Real files_changed
-On success, `files_changed` SHALL contain one entry per written file with the worktree-relative path and operation (`create` | `modify` | `delete`). The echoed-from-request behavior is removed.
+On success, `files_changed` SHALL contain one entry per applied, non-skipped change with the worktree-relative path and operation (`create` | `modify` | `delete`). Skipped deletes SHALL be omitted. The echoed-from-request behavior is removed.
 
 ### Requirement: Diff in response
 On success, the response `diff` field SHALL equal the batch diff. On any failure it SHALL be empty.
@@ -33,7 +34,7 @@ Every field present in the v0.3 request/response contracts SHALL remain with unc
 ### HANDLER-1 — REST /implement writes real files
 GIVEN a valid implement request, a temp worktree, and a fake model response containing two `file:` blocks
 WHEN POST /implement completes
-THEN both files exist on disk with the emitted content and `files_changed` contains two entries with real worktree-relative paths and operations create/modify
+THEN both files exist on disk with the emitted content and `files_changed` contains two entries with real worktree-relative paths and classified operations
 
 ### HANDLER-2 — REST response includes diff
 WHEN POST /implement completes with writes
@@ -57,3 +58,8 @@ THEN the request payload's `diff` field contains the generated diff
 ### HANDLER-6 — Response contract is additive
 WHEN any /implement response is produced
 THEN every v0.3 field is still present with the same meaning; only `files_changed` (now real), `diff`, and failure `reason`/`attempts` are added
+
+### HANDLER-7 — Skipped deletes are omitted
+GIVEN a fake model response with one write and one delete of an absent file
+WHEN POST /implement completes
+THEN `files_changed` contains only the write

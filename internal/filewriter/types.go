@@ -9,6 +9,10 @@
 // Recovery on unparseable output follows a fixed ladder (RD-2): retry once on
 // the same tier with a stricter prompt, then escalate one tier. Write failures
 // are terminal and never re-prompted.
+//
+// The parser is pure: it never touches the filesystem. Whether a write
+// creates or replaces a file is decided by the writer, which already owns
+// path resolution against the worktree.
 package filewriter
 
 import "fmt"
@@ -17,41 +21,56 @@ import "fmt"
 type OpKind string
 
 const (
-	// OpCreate writes a file that does not yet exist in the worktree.
+	// OpWrite is a parsed file: block before classification. The writer
+	// resolves it to OpCreate or OpModify against the worktree.
+	OpWrite OpKind = "write"
+
+	// OpCreate writes a file that did not exist in the worktree.
 	OpCreate OpKind = "create"
-	// OpModify replaces the entire contents of an existing file.
+
+	// OpModify replaced the entire contents of an existing file.
 	OpModify OpKind = "modify"
-	// OpDelete removes an existing file.
+
+	// OpDelete removes a file. Deleting a file that does not exist is not
+	// an error; the resulting Change is marked Skipped.
 	OpDelete OpKind = "delete"
 )
 
 // FileOp is one parsed operation from a model response.
 type FileOp struct {
-	// Kind is create, modify, or delete. Classified at parse time by whether
-	// the resolved target already exists in the worktree.
+	// Kind is OpWrite for file: blocks and OpDelete for file-delete:
+	// blocks. The parser never produces OpCreate or OpModify.
 	Kind OpKind
 
-	// RawPath is the path exactly as the model emitted it, before cleaning
-	// or resolution. Retained for error messages.
+	// RawPath is the path exactly as the model emitted it, before cleaning.
+	// Retained for error messages.
 	RawPath string
 
 	// Path is the cleaned, worktree-relative path.
 	Path string
 
-	// Content is the complete new file content. Empty for OpDelete.
+	// Content is the complete new file content. May be empty: an empty
+	// file is a legitimate file. Always empty for OpDelete.
 	Content string
 }
 
-// Change records one successfully applied operation.
+// Change records one applied operation.
 type Change struct {
 	// Path is worktree-relative.
 	Path string
 
-	// Operation is the kind that was applied.
+	// Operation is OpCreate, OpModify, or OpDelete — never OpWrite.
 	Operation OpKind
 
 	// Bytes written. Zero for OpDelete.
 	Bytes int
+
+	// Skipped is true when the operation had no effect: a delete whose
+	// target was already absent. Skipped changes are not reported in
+	// files_changed and produce no diff section, but they are counted in
+	// telemetry — a model deleting a file that never existed may have
+	// hallucinated the codebase.
+	Skipped bool
 }
 
 // Parse failure reasons. These are machine-readable and drive both the
@@ -68,10 +87,6 @@ const (
 	// ReasonMissingPath means a fence info string carried no path after
 	// the file: or file-delete: prefix.
 	ReasonMissingPath = "missing_path"
-
-	// ReasonEmptyContent means a file: block had an empty body. Deletes
-	// are exempt — they are expected to have no body.
-	ReasonEmptyContent = "empty_content"
 
 	// ReasonDuplicatePath means two operations resolved to the same
 	// worktree-relative path.
