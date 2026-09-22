@@ -114,3 +114,49 @@ func (e *ParseError) Error() string {
 	}
 	return fmt.Sprintf("filewriter: parse %s: %s", e.Reason, e.Detail)
 }
+
+// Write failure reasons. These drive the gateway.task.write_failures metric.
+// Path-safety rejections use the first three.
+const (
+	// ReasonPathTraversal means the path resolved outside the worktree,
+	// or resolution was ambiguous enough that it could not be ruled out.
+	ReasonPathTraversal = "path_traversal"
+
+	// ReasonGitignored means the path matches the worktree's .gitignore.
+	ReasonGitignored = "gitignored"
+
+	// ReasonBinaryExtension means the path has a configured binary extension.
+	ReasonBinaryExtension = "binary_extension"
+
+	// ReasonNotRegularFile means the target exists but is a directory or
+	// another non-regular file.
+	ReasonNotRegularFile = "not_regular_file"
+
+	// ReasonIOError means a filesystem operation failed.
+	ReasonIOError = "io_error"
+)
+
+// WriteError is returned when an operation is rejected or fails to apply.
+// Write failures are terminal: the executor never re-prompts on them.
+type WriteError struct {
+	// Reason is one of the write reason constants above.
+	Reason string
+
+	// Path is the offending path as supplied, worktree-relative where known.
+	Path string
+
+	// Detail explains the rejection without disclosing file contents.
+	Detail string
+
+	// Err is the underlying cause, if any.
+	Err error
+}
+
+func (e *WriteError) Error() string {
+	if e.Detail != "" {
+		return fmt.Sprintf("filewriter: write %s for %q: %s", e.Reason, e.Path, e.Detail)
+	}
+	return fmt.Sprintf("filewriter: write %s for %q", e.Reason, e.Path)
+}
+
+func (e *WriteError) Unwrap() error { return e.Err }
